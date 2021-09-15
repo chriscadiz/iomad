@@ -30,6 +30,7 @@ use core_course\external\course_summary_exporter;
 
 require_once("$CFG->libdir/externallib.php");
 require_once("lib.php");
+require_once($CFG->dirroot.'/course/lib.php');
 
 /**
  * Course external functions
@@ -4425,5 +4426,208 @@ class core_course_external extends external_api {
                     VALUE_OPTIONAL),
             ]
         );
+    }
+
+    /**
+     * Parameters for function delete_section()
+     *
+     * @return external_function_parameters
+     */
+    public static function delete_section_parameters() {
+        return new external_function_parameters([
+            'id' => new external_value(PARAM_INT, 'course section id', VALUE_REQUIRED),
+        ]);
+    }
+
+    /**
+     * Delete the section by id
+     *
+     * @param int $id section id
+     * @return string
+     * @throws dml_exception
+     * @throws invalid_parameter_exception
+     * @throws moodle_exception
+     * @throws restricted_context_exception
+     */
+    public static function delete_section($id) {
+        global $DB;
+        // Validate and normalize parameters.
+        $params = self::validate_parameters(self::delete_section_parameters(), ['id' => $id]);
+        $id = $params['id'];
+
+        $section = $DB->get_record('course_sections', array('id' => $id), '*', MUST_EXIST);
+        $course = $DB->get_record('course', array('id' => $section->course), '*', MUST_EXIST);
+        $sectionnum = $section->section;
+
+        $coursecontext = context_course::instance($section->course);
+        self::validate_context($coursecontext);
+
+        // Get section_info object with all availability options.
+        $sectioninfo = get_fast_modinfo($course)->get_section_info($sectionnum);
+
+        return course_delete_section($course, $sectioninfo, true, true);
+    }
+
+    /**
+     * Return structure for edit_section()
+     *
+     * @since Moodle 3.3
+     * @return external_description
+     */
+    public static function delete_section_returns() {
+        return new external_value(PARAM_BOOL, 'Whether delete operation was successful');
+    }
+
+    /**
+     * Parameters for function add_section()
+     *
+     * @return external_function_parameters
+     */
+    public static function add_section_parameters() {
+        return new external_function_parameters([
+            'courseid' => new external_value(PARAM_INT, 'course id to add section to', VALUE_REQUIRED),
+            'numsections' => new external_value(PARAM_INT, 'number of sections to add', VALUE_REQUIRED),
+        ]);
+    }
+
+    /**
+     * Add a new section to a course
+     *
+     * @param $courseid
+     * @param $numsections
+     * @return array
+     * @throws dml_exception
+     * @throws invalid_parameter_exception
+     * @throws moodle_exception
+     */
+    public static function add_section($courseid, $numsections) {
+        global $DB;
+        // Validate and normalize parameters.
+        $params = self::validate_parameters(self::add_section_parameters(), ['courseid' => $courseid, 'numsections' => $numsections]);
+        $courseid = $params['courseid'];
+        $numsections = $params['numsections'];
+
+        $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
+        require_capability('moodle/course:update', context_course::instance($course->id));
+
+        $sections = [];
+        for($x = 0; $x < $numsections; $x++) {
+            $section = course_create_section($course, 0);
+            $x =  new stdClass();
+            $x->id = $section->id;
+            $x->section = $section->section;
+            $sections []= $x;
+
+        }
+
+        return $sections;
+    }
+
+    /**
+     * Return structure for edit_section()
+     *
+     * @since Moodle 3.3
+     * @return external_description
+     */
+    public static function add_section_returns() {
+        return new external_multiple_structure(
+            new external_single_structure(
+                array(
+                    'id' => new external_value(PARAM_INT, 'id'),
+                    'section' => new external_value(PARAM_INT, 'section'),
+                )
+            )
+        );
+    }
+
+    /**
+     * Parameters for function reorder_outline()
+     *
+     * @return external_function_parameters
+     */
+    public static function reorder_outline_parameters() {
+        return new external_function_parameters([
+            'courseid' => new external_value(PARAM_INT, 'course id to add section to', VALUE_REQUIRED),
+            'outline' => new external_value(PARAM_RAW, 'JSON array of course outline information', VALUE_REQUIRED),
+        ]);
+    }
+
+    /**
+     * Reorder the outline of a course
+     *
+     * @param $courseid
+     * @param $outline
+     * @return bool
+     * @throws dml_exception
+     * @throws invalid_parameter_exception
+     * @throws required_capability_exception
+     * @throws coding_exception
+     */
+    public static function reorder_outline($courseid, $outline) {
+        global $DB;
+        // Validate and normalize parameters.
+        $params = self::validate_parameters(self::reorder_outline_parameters(), ['courseid' => $courseid, 'outline' => $outline]);
+        $courseid = $params['courseid'];
+        $outline = json_decode($params['outline'], true);
+
+        $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
+        require_capability('moodle/course:update', context_course::instance($course->id));
+
+        $x = 1;
+        foreach($outline as $section) {
+            $s = array_values($section['outline']);
+
+            for($l = 0; $l < count($s); $l++) { // in case they moved a topic to a different lecture
+                try {
+                    $q = new stdClass();
+                    $q->id = $s[0];
+                    $q->section = $section['lms_id'];
+                    $DB->update_record('course_modules', $q);
+                } catch (dml_write_exception $dmlWriteException) {
+                    // if 0 rows are affected ( no change ) it throws an exception.  ok.
+                    if ($dmlWriteException->error != "") {
+                        throw $dmlWriteException;
+                    }
+                }
+            }
+
+            $sequence = implode(",", $s);
+
+            $z = new stdClass();
+            $z->section = $x;
+            $z->id = $section['lms_id'];
+
+            // ok so... course and section are a unique key on course_sections, and section is a bigint...
+            $row = $DB->get_record('course_sections', ['course' => $courseid, 'id' => $z->id], 'id, section, sequence', MUST_EXIST);
+            if ($row->section != $z->section) {
+                move_section_to($course, $row->section, $z->section);
+            }
+
+            unset($z->section);
+            $z->sequence = $sequence;
+            try {
+                $DB->update_record('course_sections', $z);
+            } catch (dml_write_exception $dmlWriteException) {
+                // if 0 rows are affected ( no change ) it throws an exception.  ok.
+                if ($dmlWriteException->error != "") {
+                    throw $dmlWriteException;
+                }
+            }
+
+            $x++;
+        }
+
+        rebuild_course_cache($courseid, true);
+        return true;
+    }
+
+    /**
+     * Return structure for reorder_outline()
+     *
+     * @since Moodle 3.3
+     * @return external_description
+     */
+    public static function reorder_outline_returns() {
+        return new external_value(PARAM_BOOL, 'success');
     }
 }

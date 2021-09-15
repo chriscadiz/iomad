@@ -30,6 +30,7 @@
 CVS
 .DS_Store
 /.settings/
+/.idea
 /.project
 /.buildpath
 /.cache
@@ -44,4 +45,5 @@ composer.phar
 /lib/yuilib/*/*/*-coverage.js
 atlassian-ide-plugin.xml
 /node_modules/
+/scholu/.env
 moodle-plugin-ci.phar

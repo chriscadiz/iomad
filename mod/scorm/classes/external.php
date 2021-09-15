@@ -29,7 +29,20 @@ defined('MOODLE_INTERNAL') || die;
 require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/mod/scorm/lib.php');
 require_once($CFG->dirroot . '/mod/scorm/locallib.php');
+require_once($CFG->dirroot . '/course/modlib.php');
 
+require_once($CFG->dirroot.'/course/lib.php');
+require_once($CFG->libdir.'/completionlib.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_self.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_date.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_unenrol.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_activity.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_duration.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_grade.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_role.php');
+require_once($CFG->dirroot.'/completion/criteria/completion_criteria_course.php');
+require_once $CFG->libdir.'/gradelib.php';
+require_once($CFG->dirroot.'/course/completion_form.php');
 /**
  * SCORM module external functions
  *
@@ -982,5 +995,295 @@ class mod_scorm_external extends external_api {
         }
 
         return new external_single_structure($structure);
+    }
+
+    public static function create_activity_parameters() {
+
+        return new external_function_parameters([
+            'course' => new external_value(PARAM_INT, 'course id'),
+            'section' => new external_value(PARAM_INT, 'section id'),
+            'packagefile' => new external_value(PARAM_INT, 'package file id'),
+            'name' => new external_value(PARAM_TEXT, 'activity name'),
+            'type' => new external_value(PARAM_INT, '3 if quiz, 5 if topic'),
+            'passmark' => new external_value(PARAM_INT, 'quiz passmark if quiz type'),
+            'weight' => new external_value(PARAM_INT, 'quiz weight towards overall course grade')
+        ]);
+    }
+
+    /**
+     * @param $course
+     * @param $section
+     * @param $packagefile
+     * @param $name
+     * @param $type
+     * @param $passmark
+     * @param $weight
+     * @return array
+     * @throws dml_exception
+     * @throws invalid_parameter_exception
+     * @throws moodle_exception
+     * @throws required_capability_exception
+     */
+    public static function create_activity($course, $section, $packagefile, $name, $type, $passmark, $weight) {
+        global $DB, $CFG, $USER;
+
+        $USER->ignoresesskey = true;
+
+        self::validate_parameters(self::create_activity_parameters(), [
+            'course' => $course,
+            'section' => $section,
+            'packagefile' => $packagefile,
+            'name' => $name,
+            'type' => $type,
+            'passmark' => $passmark,
+            'weight' => $weight,
+        ]);
+
+        require_capability('moodle/course:update', context_course::instance($course));
+
+        $course = $DB->get_record('course', array('id'=>$course), '*', MUST_EXIST);
+
+        list($module, $context, $cw, $cm, $data) = prepare_new_moduleinfo_data($course, "scorm", $section);
+
+        $data->name = $name;
+        $data->section = $section;
+        $data->visible = 1;
+        $data->course = $course;
+        $data->module = 19;
+        $data->modulename = "scorm";
+        $data->groupmode = 0;
+        $data->groupingid = 0;
+        $data->id = "";
+        $data->instance = "";
+        $data->coursemodule = "";
+        $data->completion = 1;
+        $data->completionview = 1;
+        $data->introeditor = ['text' => "", 'format' => "1", 'itemid' => $packagefile];
+        $data->return = 0;
+        $data->sr = 0;
+        $data->add = "scorm";
+
+        $modmoodleform = "$CFG->dirroot/mod/scorm/mod_form.php";
+        require_once($modmoodleform);
+
+        $mform = new mod_scorm_mod_form($data, $cw->section, $cm, $course);
+
+        $mform->get_form()->_flagSubmitted = true;
+        $mform->set_data($data);
+
+        $fromform = $mform->get_data_from_api();
+
+        $fromform->displayactivityname = 1;
+        $fromform->skipview = 0;
+        $fromform->hidebrowse = 0;
+        $fromform->displaycoursestructure = 0;
+        $fromform->hidetoc = 1;
+        $fromform->nav = 1;
+        $fromform->grademethod = ($type == 3) ? 1 : 0;
+        $fromform->forcenewattempt = 1;
+        $fromform->maxgrade = 100;
+        $fromform->maxattempt = 0;
+        $fromform->whatgrade = 0;
+        $fromform->forcecompleted = 0;
+        $fromform->auto = 0;
+        $fromform->autocommit = 0;
+        $fromform->masteryoverride = 1;
+        $fromform->completionunlocked = 1;
+        $fromform->completion = 2;
+        $fromform->completionview = 1;
+        $fromform->completionscorerequired = null;
+        $fromform->completionscoredisabled = 1;
+        $fromform->completionstatusrequired = 4;
+        $fromform->completionstatusallscos = 1;
+        $fromform->completionexpected = 0;
+
+        $fromform = add_moduleinfo($fromform, $course, $mform);
+
+        $result =[
+            'warnings' => [],
+            'id' => $fromform->coursemodule
+        ];
+
+        return $result;
+    }
+
+    /**
+     * @return external_single_structure
+     */
+    public static function create_activity_returns() {
+
+        $structure = [
+            'warnings' => new external_warnings(),
+            'id' => new external_value(PARAM_INT, 'id')
+        ];
+
+        return new external_single_structure($structure);
+    }
+
+    /**
+     * @return external_function_parameters
+     */
+    public static function update_course_grading_parameters() {
+        return new external_function_parameters([
+            'course' => new external_value(PARAM_INT, 'course id'),
+            'outline' => new external_value(PARAM_RAW, 'JSON array of course outline information', VALUE_REQUIRED),
+        ]);
+    }
+
+    /**
+     * @param $course
+     * @param $outline
+     * @return bool
+     * @throws dml_exception
+     * @throws invalid_parameter_exception
+     * @throws required_capability_exception
+     * @throws coding_exception
+     */
+    public static function update_course_grading($course, $outline) {
+        global $DB;
+
+        $params = self::validate_parameters(self::update_course_grading_parameters(), ['course' => $course, 'outline' => $outline]);
+        require_capability('moodle/course:update', context_course::instance($course));
+
+        $outline = json_decode($params['outline'], true);
+        $scorms = $DB->get_recordset_sql("SELECT grademethod, scorm.id, course_modules.id AS module_id
+                                    FROM scorm INNER JOIN course_modules
+                                      ON scorm.course = course_modules.course
+                                      AND course_modules.module = 19
+                                      AND course_modules.instance = scorm.id
+                                    WHERE scorm.course = :course", ['course' => $course]);
+
+        foreach($scorms as $scorm) {
+
+            if ($scorm->grademethod > 0) {
+                $found = false;
+                foreach($outline as $section) {
+                    foreach($section['quizzes'] as $id => $count) {
+                        if ($id == $scorm->module_id && $count > 0) {
+                            $weight = $count;
+                            $sql = "UPDATE grade_items SET aggregationcoef = ?, aggregationcoef2 = 0.00 WHERE iteminstance = ? AND courseid = ? AND itemmodule = 'scorm'";
+                            $DB->execute($sql, [$weight, $scorm->id, $course]);
+                            $found = true;
+                        }
+                        if ($found) break;
+                    }
+                    if ($found) break;
+                }
+            } else {
+                $sql = "UPDATE grade_items SET aggregationcoef = 0.00, aggregationcoef2 = 0.00 WHERE iteminstance = ? AND courseid = ? AND itemmodule = 'scorm'";
+                $DB->execute($sql, [$scorm->id, $course]);
+            }
+        }
+
+        // now update the completion criteria
+        self::update_course_completion($course);
+
+        return true;
+    }
+
+    /**
+     * @return external_value
+     */
+    public static function update_course_grading_returns() {
+
+        return new external_value(PARAM_BOOL, 'success');
+    }
+
+    /**
+     * @param $course
+     * @throws coding_exception
+     * @throws dml_exception
+     */
+    private static function update_course_completion($course) {
+        global $DB, $USER, $CFG;
+
+        $course = $DB->get_record('course', array('id'=>$course), '*', MUST_EXIST);
+
+        $data = new stdClass();
+        $data->overall_aggregation = "2";
+        $data->checkbox_controller1 = 1;
+
+        $criteria_activity = [];
+        $activities = $DB->get_records('course_modules', ['module' => 19, 'course' => $course->id], 'id', 'id');
+        foreach($activities as $activity) {
+            $criteria_activity[$activity->id] = "1";
+        }
+
+        $data->criteria_activity = $criteria_activity;
+        $data->activity_aggregation = "1";
+        $data->criteria_course = 0;
+        $data->course_aggregation = "1";
+        $data->criteria_date_value = time();
+        $data->criteria_grade_value = "0.00000";
+        $data->role_aggregation = "1";
+        $data->submitbutton = "Save changes";
+        $data->id = $course->id;
+
+        $completion = new completion_info($course);
+
+        // Delete old criteria.
+        $completion->clear_criteria();
+
+        // Loop through each criteria type and run its update_config() method.
+        global $COMPLETION_CRITERIA_TYPES;
+        foreach ($COMPLETION_CRITERIA_TYPES as $type) {
+            $class = 'completion_criteria_'.$type;
+            $criterion = new $class();
+            $criterion->update_config($data);
+        }
+
+        // Handle overall aggregation.
+        $aggdata = array(
+            'course'        => $data->id,
+            'criteriatype'  => null
+        );
+        $aggregation = new completion_aggregation($aggdata);
+        $aggregation->setMethod($data->overall_aggregation);
+        $aggregation->save();
+
+        // Handle activity aggregation.
+        if (empty($data->activity_aggregation)) {
+            $data->activity_aggregation = 0;
+        }
+
+        $aggdata['criteriatype'] = COMPLETION_CRITERIA_TYPE_ACTIVITY;
+        $aggregation = new completion_aggregation($aggdata);
+        $aggregation->setMethod($data->activity_aggregation);
+        $aggregation->save();
+
+        // Handle course aggregation.
+        if (empty($data->course_aggregation)) {
+            $data->course_aggregation = 0;
+        }
+
+        $aggdata['criteriatype'] = COMPLETION_CRITERIA_TYPE_COURSE;
+        $aggregation = new completion_aggregation($aggdata);
+        $aggregation->setMethod($data->course_aggregation);
+        $aggregation->save();
+
+        // Handle role aggregation.
+        if (empty($data->role_aggregation)) {
+            $data->role_aggregation = 0;
+        }
+
+        $aggdata['criteriatype'] = COMPLETION_CRITERIA_TYPE_ROLE;
+        $aggregation = new completion_aggregation($aggdata);
+        $aggregation->setMethod($data->role_aggregation);
+        $aggregation->save();
+
+        // Create and queue an adhoc task for the course grade reset.
+        //        require_once("$CFG->dirroot/course/classes/task/course_grade_reset.php");
+        $graderesettask = new \core\task\course_grade_reset();
+        $data = ['courseid' => $course->id];
+        $graderesettask->set_custom_data($data);
+        $graderesettask->set_userid($USER->id);
+        \core\task\manager::queue_adhoc_task($graderesettask);
+
+        //        grade_course_reset($course->id);
+
+        // Trigger an event for course module completion changed.
+        $event = \core\event\course_completion_updated::create(['courseid' => $course->id, 'context' => context_course::instance($course->id)]);
+        $event->trigger();
+
     }
 }
