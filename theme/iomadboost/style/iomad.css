@@ -102,3 +102,94 @@ div.iomadlink, div.iomadlinkreports {
 #page-blocks-iomad_company_admin-company_groups_create_form #region-main {
     height: 100%;
 }
+
+/** overrides **/
+body {
+    background-color: #f5f8fa;
+}
+
+[data-region="drawer"], aside {
+    background-color: #f5f8fa !important;
+}
+
+.nav-tabs .nav-link.active, .nav-tabs .nav-item.show .nav-link {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+button.btn.nav-link.bg-gray {
+    background-color: #9dba00 !important;
+    color: #fff;
+    border-radius: 5px;
+}
+
+.btn {
+    border-radius: 5px;
+}
+
+.btn.btn-primary {
+    background-color: #9dba00 !important;
+    border-color: #9dba00 !important;
+}
+
+.badge-info, .btn.btn-secondary {
+    background-color: #00acce !important;
+    border-color: #00acce !important;
+    color: #fff;
+}
+
+.btn.btn-warning {
+    background-color: #bf5329 !important;
+    border-color: #bf5329 !important;
+    color: #fff;
+}
+
+
+.list-group-item.active {
+    background-color: #9dba00 !important;
+    border-color: #9dba00 !important;
+}
+
+.card, section {
+    border-radius: 5px !important;
+    -webkit-box-shadow: 5px 5px 11px #00000029;
+    box-shadow: 5px 5px 11px #00000029;
+    background-color: #fff;
+}
+
+.list-group li:first-of-type a {
+    border-top-left-radius: 5px !important;
+    border-top-right-radius: 5px !important;
+}
+
+.list-group li:last-of-type a {
+    border-bottom-left-radius: 5px !important;
+    border-bottom-right-radius: 5px !important;
+}
+
+.iomadlink_container .iomadlink .iomadicon .fa-action, .iomadlink_container .iomadlinkreports .iomadicon .fa-action {
+    margin-left: -15px;
+}
+
+div.iomadlink, div.iomadlinkreports {
+    background-color: #fff;
+    padding: 10px;
+}
+
+.actiondescription {
+    font-weight: bold;
+}
+
+#inst1 .row .col-2, #inst1 .row .col-10 {
+    display: none;
+}
+
+.coursebox > .info > .coursename a {
+    background: none !important;
+    padding-left: 0 !important;
+}
+
+.coursebox .content .courseimage img {
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
