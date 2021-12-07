@@ -40,7 +40,7 @@ function mycourses_get_my_completion($datefrom = 0) {
     $mycompleted = $DB->get_records_sql("SELECT cc.id, cc.userid, cc.courseid as courseid, cc.finalscore as finalgrade, cc.timecompleted, c.fullname as coursefullname, c.summary as coursesummary, c.visible, ic.hasgrade
                                        FROM {local_iomad_track} cc
                                        JOIN {course} c ON (c.id = cc.courseid)
-                                       LEFT JOIN {iomad_courses} ic ON (c.id = ic.courseid AND cc.courseid = ic.courseid)
+                                       JOIN {iomad_courses} ic ON (c.id = ic.courseid and cc.courseid = ic.courseid)
                                        WHERE cc.userid = :userid
                                        AND cc.timecompleted IS NOT NULL",
                                        array('userid' => $USER->id));
@@ -74,6 +74,9 @@ function mycourses_get_my_completion($datefrom = 0) {
     foreach ($myinprogress as $id => $inprogress) {
         $myinprogress[$id]->coursefullname = format_string($inprogress->coursefullname);
         $myusedcourses[$inprogress->courseid] = $inprogress->courseid;
+        if (empty($inprogress->hasgrade)) {
+            $myinprogress[$id]->finalgrade = "";
+        }
     }
     if (!empty($myusedcourses)) {
         $inprogresssql = "AND c.id NOT IN (" . join(',', array_keys($myusedcourses)) . ")";
@@ -124,6 +127,10 @@ function mycourses_get_my_completion($datefrom = 0) {
     foreach ($mycompleted as $id => $completed) {
         $mycompleted[$id]->coursefullname = format_string($completed->coursefullname);
         $mycompleted[$id]->certificates = array();
+        $mycompleted[$id]->hasgrade = $completed->hasgrade;
+        if (empty($completed->hasgrade)) {
+            $mycompleted[$id]->finalgrade = "";
+        }
         // Deal with the iomadcertificate info.
         if ($hasiomadcertificate) {
             if ($iomadcertificateinfo = $DB->get_record('iomadcertificate',
