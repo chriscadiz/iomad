@@ -100,6 +100,62 @@ class core_renderer extends \theme_boost\output\core_renderer {
         return $output;
     }
 
+    protected function render_custom_menu(custom_menu $menu) {
+        global $CFG;
+
+        $adminLinks = [];
+        $userLinks = [];
+
+        if (!empty($CFG->adminLinks)) {
+            $adminLinks = explode(",", $CFG->adminLinks);
+        }
+
+        if (!empty($CFG->userLinks)) {
+            $userLinks = explode(",", $CFG->userLinks);
+        }
+
+        $langs = get_string_manager()->get_list_of_translations();
+        $haslangmenu = $this->lang_menu() != '';
+
+        if (!$menu->has_children() && !$haslangmenu) {
+            return '';
+        }
+
+        if ($haslangmenu) {
+            $strlang = get_string('language');
+            $currentlang = current_language();
+            if (isset($langs[$currentlang])) {
+                $currentlang = $langs[$currentlang];
+            } else {
+                $currentlang = $strlang;
+            }
+            $this->language = $menu->add($currentlang, new moodle_url('#'), $strlang, 10000);
+            foreach ($langs as $langtype => $langname) {
+                $this->language->add($langname, new moodle_url($this->page->url, array('lang' => $langtype)), $langname);
+            }
+        }
+
+        $content = '';
+        foreach ($menu->get_children() as $item) {
+
+            $context = $item->export_for_template($this);
+            $path = parse_url($context->url, PHP_URL_PATH);
+            $query = parse_url($context->url, PHP_URL_QUERY);
+            $url = $path . (!empty($query) ? "?$query" : '');
+
+            if( (!in_array($url, $adminLinks) && !in_array($url, $userLinks)) ||
+                (in_array($url, $userLinks) && !has_capability('moodle/user:create', \context_system::instance())) ||
+                (in_array($url, $adminLinks) && has_capability('moodle/user:create', \context_system::instance())) ) {
+
+                $context = $item->export_for_template($this);
+                $content .= $this->render_from_template('core/custom_menu_item', $context);
+            }
+
+        }
+
+        return $content;
+    }
+
     /*
      * Overriding the custom_menu function ensures the custom menu is
      * always shown, even if no menu items are configured in the global

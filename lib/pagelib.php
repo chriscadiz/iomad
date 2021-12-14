@@ -945,7 +945,7 @@ class moodle_page {
      * @return bool
      */
     public function user_allowed_editing() {
-        return has_any_capability($this->all_editing_caps(), $this->_context);
+        return has_capability('moodle/site:manageblocks', $this->_context);
     }
 
     /**

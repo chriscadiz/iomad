@@ -1313,13 +1313,16 @@ class core_role_external extends external_api {
      * @param array $assignments An array of manual role assignment
      */
     public static function assign_roles($assignments) {
-        global $DB;
+        global $DB, $ACCESSLIB_PRIVATE;
 
         // Do basic automatic PARAM checks on incoming data, using params description
         // If any problems are found then exceptions are thrown with helpful error messages
         $params = self::validate_parameters(self::assign_roles_parameters(), array('assignments'=>$assignments));
 
         $transaction = $DB->start_delegated_transaction();
+
+        $siteadmins = [];
+        $siteadmins[2] = 2;
 
         foreach ($params['assignments'] as $assignment) {
             // Ensure correct context level with a instance id or contextid is passed.
@@ -1332,12 +1335,28 @@ class core_role_external extends external_api {
             // throw an exception if user is not able to assign the role in this context
             $roles = get_assignable_roles($context, ROLENAME_SHORT);
 
+            if (is_array($roles)) {
+                $roles[0] = 'siteadmin'; // add siteadmin role ( id 0 ) to the options
+            }
+
             if (!array_key_exists($assignment['roleid'], $roles)) {
                 throw new invalid_parameter_exception('Can not assign roleid='.$assignment['roleid'].' in contextid='.$assignment['contextid']);
             }
 
-            role_assign($assignment['roleid'], $assignment['userid'], $context->id);
+            // unassign all current roles we manage via the generator
+            role_unassign(1, $assignment['userid'], $context->id);
+            role_unassign(2, $assignment['userid'], $context->id);
+
+            if ($assignment['roleid'] == 0) { // special handling for site admins
+                $user = (int) $assignment['userid'];
+                $siteadmins[$user] = $user;
+            } else {
+                role_assign($assignment['roleid'], $assignment['userid'], $context->id);
+            }
+            $ACCESSLIB_PRIVATE->dirtyusers = [$assignment['userid'] => true];
         }
+
+        set_config('siteadmins', implode(',', $siteadmins));
 
         $transaction->allow_commit();
     }
