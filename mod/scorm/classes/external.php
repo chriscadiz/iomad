@@ -1048,7 +1048,7 @@ class mod_scorm_external extends external_api {
         $data->section = $section;
         $data->visible = 1;
         $data->course = $course;
-        $data->module = 19;
+        $data->module = 20;
         $data->modulename = "scorm";
         $data->groupmode = 0;
         $data->groupingid = 0;
@@ -1148,7 +1148,7 @@ class mod_scorm_external extends external_api {
         $scorms = $DB->get_recordset_sql("SELECT grademethod, scorm.id, course_modules.id AS module_id
                                     FROM scorm INNER JOIN course_modules
                                       ON scorm.course = course_modules.course
-                                      AND course_modules.module = 19
+                                      AND course_modules.module = 20
                                       AND course_modules.instance = scorm.id
                                     WHERE scorm.course = :course", ['course' => $course]);
 
@@ -1203,7 +1203,7 @@ class mod_scorm_external extends external_api {
         $data->checkbox_controller1 = 1;
 
         $criteria_activity = [];
-        $activities = $DB->get_records('course_modules', ['module' => 19, 'course' => $course->id], 'id', 'id');
+        $activities = $DB->get_records('course_modules', ['module' => 20, 'course' => $course->id], 'id', 'id');
         foreach($activities as $activity) {
             $criteria_activity[$activity->id] = "1";
         }

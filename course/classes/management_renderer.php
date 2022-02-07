@@ -124,6 +124,7 @@ class core_course_management_renderer extends plugin_renderer_base {
      * @return string
      */
     public function category_listing(core_course_category $category = null) {
+        global $USER;
 
         if ($category === null) {
             $selectedparents = array();
@@ -138,6 +139,22 @@ class core_course_management_renderer extends plugin_renderer_base {
         $catatlevel = array_unique($catatlevel);
 
         $listing = core_course_category::top()->get_children();
+        $catIds = [];
+        $company = company::get_company_byuserid($USER->id);
+
+        // filter by user parent company
+        if (isset($company)) {
+            $company = new company($company->id);
+            $catIds[] = $company->get(['category'])->category;
+            $childcompanies = $company->get_child_companies_recursive();
+
+            if(count($childcompanies) > 0 ) {
+                foreach($childcompanies as $child) {
+                    $catIds[] = $child->category;
+                }
+            }
+            $listing = array_intersect_key($listing, array_flip($catIds));
+        }
 
         $attributes = array(
                 'class' => 'ml-1 list-unstyled',

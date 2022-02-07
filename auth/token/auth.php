@@ -53,7 +53,7 @@ class auth_plugin_token extends auth_plugin_db {
         $fromdb = $fields['token'];
         $rs->Close();
         $authdb->Close();
-
+        error_log(print_r($fields,1));
         if ($extpassword == $fromdb) {
             $user = $DB->get_record('user', array('username' => $extusername));
         }
